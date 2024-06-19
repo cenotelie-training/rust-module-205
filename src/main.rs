@@ -1,11 +1,16 @@
 #![forbid(unsafe_code)]
 #![warn(clippy::pedantic)]
 
+use std::io::Read;
+
 use tokio::io::AsyncWriteExt;
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
+    let mut sample = String::new();
+    std::io::stdin().read_to_string(&mut sample)?;
 
+    compile_input(&sample).await?;
     Ok(())
 }
 
