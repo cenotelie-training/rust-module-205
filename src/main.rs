@@ -1,7 +1,9 @@
 #![forbid(unsafe_code)]
 #![warn(clippy::pedantic)]
 
+use std::future::Future;
 use std::io::Read;
+use std::pin::Pin;
 use std::process::Stdio;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -9,6 +11,7 @@ use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use wasmtime::{Config, Engine, Module, Store};
 use wasmtime_wasi::preview1::WasiP1Ctx;
+use wasmtime_wasi::{HostOutputStream, StdoutStream, StreamResult, Subscribe};
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
@@ -93,6 +96,42 @@ struct StoreData {
 struct MyStream {
     /// The buffer for the stream
     buffer: Arc<Mutex<String>>,
+}
+
+impl StdoutStream for MyStream {
+    fn stream(&self) -> Box<dyn HostOutputStream> {
+        Box::new(self.clone())
+    }
+
+    fn isatty(&self) -> bool {
+        false
+    }
+}
+
+impl Subscribe for MyStream {
+    fn ready<'life0, 'async_trait>(&'life0 mut self) -> Pin<Box<dyn Future<Output = ()> + Send + 'async_trait>>
+    where
+        'life0: 'async_trait,
+        Self: 'async_trait,
+    {
+        Box::pin(std::future::ready(()))
+    }
+}
+
+impl HostOutputStream for MyStream {
+    fn write(&mut self, bytes: bytes::Bytes) -> StreamResult<()> {
+        let message = String::from_utf8_lossy(&bytes);
+        self.buffer.lock().unwrap().push_str(&message);
+        Ok(())
+    }
+
+    fn flush(&mut self) -> StreamResult<()> {
+        Ok(())
+    }
+
+    fn check_write(&mut self) -> StreamResult<usize> {
+        Ok(usize::MAX)
+    }
 }
 
 /// Execute the job payload after building
