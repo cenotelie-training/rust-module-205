@@ -6,7 +6,7 @@ use std::process::Stdio;
 use std::time::Duration;
 
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use wasmtime::{Config, Engine, Store};
+use wasmtime::{Config, Engine, Module, Store};
 use wasmtime_wasi::preview1::WasiP1Ctx;
 
 #[tokio::main]
@@ -100,5 +100,10 @@ async fn execute_payload(wasm_file: &str) -> Result<(), anyhow::Error> {
     let mut store = Store::new(&engine, host);
     let mut linker = wasmtime::Linker::new(&engine);
     wasmtime_wasi::preview1::add_to_linker_async(&mut linker, |host: &mut StoreData| &mut host.context_wasi_p1)?;
+
+    let module_payload = Module::from_file(&engine, wasm_file)?;
+    let module_payload_instance = linker.instantiate_async(&mut store, &module_payload).await?;
+    let payload_main = module_payload_instance.get_typed_func::<(), ()>(&mut store, "__entry")?;
+    payload_main.call_async(&mut store, ()).await?;
     Ok(())
 }
