@@ -6,6 +6,8 @@ use std::process::Stdio;
 use std::time::Duration;
 
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use wasmtime::{Config, Engine, Store};
+use wasmtime_wasi::preview1::WasiP1Ctx;
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
@@ -79,7 +81,24 @@ async fn compile_input(sample: &str) -> Result<BuildResult, anyhow::Error> {
     }
 }
 
+/// Internal data for a WASM store in order to execute WASM code
+struct StoreData {
+    /// The associated preview 1 WASI context
+    context_wasi_p1: WasiP1Ctx,
+}
+
 /// Execute the job payload after building
+#[allow(clippy::unused_async)]
 async fn execute_payload(wasm_file: &str) -> Result<(), anyhow::Error> {
+    let mut config = Config::new();
+    config.async_support(true);
+    let engine = Engine::new(&config)?;
+    let context_wasi_p1 = wasmtime_wasi::WasiCtxBuilder::new().build_p1();
+    let host = StoreData {
+        context_wasi_p1,
+    };
+    let mut store = Store::new(&engine, host);
+    let mut linker = wasmtime::Linker::new(&engine);
+    wasmtime_wasi::preview1::add_to_linker_async(&mut linker, |host: &mut StoreData| &mut host.context_wasi_p1)?;
     Ok(())
 }
