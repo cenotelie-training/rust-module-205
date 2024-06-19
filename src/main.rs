@@ -93,7 +93,10 @@ async fn execute_payload(wasm_file: &str) -> Result<(), anyhow::Error> {
     let mut config = Config::new();
     config.async_support(true);
     let engine = Engine::new(&config)?;
-    let context_wasi_p1 = wasmtime_wasi::WasiCtxBuilder::new().build_p1();
+    let context_wasi_p1 = wasmtime_wasi::WasiCtxBuilder::new()
+        .inherit_stdout()
+        .inherit_stderr()
+        .build_p1();
     let host = StoreData {
         context_wasi_p1,
     };
