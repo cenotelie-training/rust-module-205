@@ -140,9 +140,11 @@ async fn execute_payload(wasm_file: &str) -> Result<(), anyhow::Error> {
     let mut config = Config::new();
     config.async_support(true);
     let engine = Engine::new(&config)?;
+    let stdout = Arc::new(Mutex::new(String::new()));
+    let stderr = Arc::new(Mutex::new(String::new()));
     let context_wasi_p1 = wasmtime_wasi::WasiCtxBuilder::new()
-        .inherit_stdout()
-        .inherit_stderr()
+        .stdout(MyStream { buffer: stdout.clone() })
+        .stderr(MyStream { buffer: stderr.clone() })
         .build_p1();
     let host = StoreData {
         context_wasi_p1,
