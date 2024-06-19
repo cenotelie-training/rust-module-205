@@ -31,7 +31,9 @@ async fn main() -> Result<(), anyhow::Error> {
         BuildResult::BuildSuccess => {}
     }
 
-    execute_payload(WASM_FILE_NAME).await?;
+    let (stdout, stderr) = execute_payload(WASM_FILE_NAME).await?;
+    print!("{stdout}");
+    print!("{stderr}");
 
     Ok(())
 }
@@ -136,7 +138,7 @@ impl HostOutputStream for MyStream {
 
 /// Execute the job payload after building
 #[allow(clippy::unused_async)]
-async fn execute_payload(wasm_file: &str) -> Result<(), anyhow::Error> {
+async fn execute_payload(wasm_file: &str) -> Result<(String, String), anyhow::Error> {
     let mut config = Config::new();
     config.async_support(true);
     let engine = Engine::new(&config)?;
@@ -157,5 +159,9 @@ async fn execute_payload(wasm_file: &str) -> Result<(), anyhow::Error> {
     let module_payload_instance = linker.instantiate_async(&mut store, &module_payload).await?;
     let payload_main = module_payload_instance.get_typed_func::<(), ()>(&mut store, "__entry")?;
     payload_main.call_async(&mut store, ()).await?;
-    Ok(())
+    drop(store);
+    Ok((
+        Arc::try_unwrap(stdout).unwrap().into_inner().unwrap(),
+        Arc::try_unwrap(stderr).unwrap().into_inner().unwrap(),
+    ))
 }
