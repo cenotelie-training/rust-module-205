@@ -3,6 +3,7 @@
 
 use std::io::Read;
 use std::process::Stdio;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -85,6 +86,13 @@ async fn compile_input(sample: &str) -> Result<BuildResult, anyhow::Error> {
 struct StoreData {
     /// The associated preview 1 WASI context
     context_wasi_p1: WasiP1Ctx,
+}
+
+/// A listener for a stream from wasm IO
+#[derive(Debug, Clone)]
+struct MyStream {
+    /// The buffer for the stream
+    buffer: Arc<Mutex<String>>,
 }
 
 /// Execute the job payload after building
