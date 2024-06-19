@@ -25,10 +25,13 @@ async fn main() -> Result<(), anyhow::Error> {
         BuildResult::BuildSuccess => {}
     }
 
+    execute_payload(WASM_FILE_NAME).await?;
+
     Ok(())
 }
 
 const SOURCE_FILE_NAME: &str = "main.rs";
+const WASM_FILE_NAME: &str = "main.wasm";
 
 /// The result of building a sample of code
 #[derive(Debug)]
@@ -74,4 +77,9 @@ async fn compile_input(sample: &str) -> Result<BuildResult, anyhow::Error> {
         child.kill().await?;
         Ok(BuildResult::Timeout)
     }
+}
+
+/// Execute the job payload after building
+async fn execute_payload(wasm_file: &str) -> Result<(), anyhow::Error> {
+    Ok(())
 }
