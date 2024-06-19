@@ -1,39 +1,32 @@
 #![forbid(unsafe_code)]
 #![warn(clippy::pedantic)]
 
-use std::future::Future;
-use std::io::Read;
+use std::future::{Future, IntoFuture};
+use std::net::SocketAddr;
 use std::pin::Pin;
 use std::process::Stdio;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use axum::routing::get;
+use axum::Router;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use wasmtime::{Config, Engine, Module, Store};
 use wasmtime_wasi::preview1::WasiP1Ctx;
 use wasmtime_wasi::{HostOutputStream, StdoutStream, StreamResult, Subscribe};
 
+async fn route_hello() -> &'static str {
+    "Hello, World!"
+}
+
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
-    let mut sample = String::new();
-    std::io::stdin().read_to_string(&mut sample)?;
+    let app = Router::new().route("/hello", get(route_hello));
 
-    let result = compile_input(&sample).await?;
-    match result {
-        BuildResult::Timeout => {
-            return Err(anyhow::Error::msg("timeout when building"));
-        }
-        BuildResult::BuildFailed { stdout, stderr } => {
-            println!("{stdout}");
-            eprintln!("{stderr}");
-            return Ok(());
-        }
-        BuildResult::BuildSuccess => {}
-    }
-
-    let (stdout, stderr) = execute_payload(WASM_FILE_NAME).await?;
-    print!("{stdout}");
-    print!("{stderr}");
+    let addr = SocketAddr::from(([0, 0, 0, 0], 8000));
+    axum::serve(tokio::net::TcpListener::bind(addr).await.unwrap(), app)
+        .into_future()
+        .await?;
 
     Ok(())
 }
