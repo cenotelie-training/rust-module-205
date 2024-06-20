@@ -13,7 +13,7 @@ use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde::Serialize;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use wasmtime::{Config, Engine, Module, Store};
+use wasmtime::{Config, Engine, Module, Store, StoreLimits, StoreLimitsBuilder};
 use wasmtime_wasi::preview1::WasiP1Ctx;
 use wasmtime_wasi::{HostOutputStream, StdoutStream, StreamResult, Subscribe};
 
@@ -112,6 +112,8 @@ async fn compile_input(sample: &str) -> Result<BuildResult, anyhow::Error> {
 struct StoreData {
     /// The associated preview 1 WASI context
     context_wasi_p1: WasiP1Ctx,
+    /// The limits for execution
+    limits: StoreLimits,
 }
 
 /// A listener for a stream from wasm IO
@@ -160,6 +162,11 @@ impl HostOutputStream for MyStream {
 const EXEC_FUEL_START: u64 = 100_000;
 const EXEC_FUEL_YIELD: u64 = 5000;
 
+/// Maximum number of memory slots
+const LIMIT_MAX_MEMORIES: usize = 10;
+/// Maximum size of a memory (100kb)
+const LIMIT_MAX_MEMORY_SIZE: usize = 10_000_000;
+
 /// Execute the job payload after building
 #[allow(clippy::unused_async)]
 async fn execute_payload(wasm_file: &str) -> Result<(String, String), anyhow::Error> {
@@ -175,10 +182,16 @@ async fn execute_payload(wasm_file: &str) -> Result<(String, String), anyhow::Er
         .build_p1();
     let host = StoreData {
         context_wasi_p1,
+        limits: StoreLimitsBuilder::new()
+            .instances(1)
+            .memories(LIMIT_MAX_MEMORIES)
+            .memory_size(LIMIT_MAX_MEMORY_SIZE)
+            .build(),
     };
     let mut store = Store::new(&engine, host);
     store.set_fuel(EXEC_FUEL_START)?;
     store.fuel_async_yield_interval(Some(EXEC_FUEL_YIELD))?;
+    store.limiter(|store| &mut store.limits);
     let mut linker = wasmtime::Linker::new(&engine);
     wasmtime_wasi::preview1::add_to_linker_async(&mut linker, |host: &mut StoreData| &mut host.context_wasi_p1)?;
 
