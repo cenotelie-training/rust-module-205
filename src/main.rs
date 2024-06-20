@@ -8,8 +8,10 @@ use std::process::Stdio;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use axum::routing::get;
-use axum::Router;
+use axum::http::StatusCode;
+use axum::routing::{get, post};
+use axum::{Json, Router};
+use serde::Serialize;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use wasmtime::{Config, Engine, Module, Store};
 use wasmtime_wasi::preview1::WasiP1Ctx;
@@ -19,9 +21,35 @@ async fn route_hello() -> &'static str {
     "Hello, World!"
 }
 
+/// The outputs for the execution of a sample of code
+#[derive(Serialize)]
+struct ExecutionOutput {
+    /// The stdout stream
+    stdout: String,
+    /// The stderr stream
+    stderr: String,
+}
+
+async fn route_execute(input: String) -> Result<(StatusCode, Json<ExecutionOutput>), (StatusCode, String)> {
+    match compile_input(&input).await {
+        Err(e) => return Err((StatusCode::from_u16(500).unwrap(), e.to_string())),
+        Ok(BuildResult::Timeout) => return Err((StatusCode::from_u16(500).unwrap(), String::from("timeout when building"))),
+        Ok(BuildResult::BuildFailed { stdout, stderr }) => {
+            return Err((StatusCode::from_u16(400).unwrap(), format!("{stdout}\n{stderr}")))
+        }
+        Ok(BuildResult::BuildSuccess) => {}
+    }
+    match execute_payload(WASM_FILE_NAME).await {
+        Err(e) => Err((StatusCode::from_u16(500).unwrap(), e.to_string())),
+        Ok((stdout, stderr)) => Ok((StatusCode::from_u16(200).unwrap(), Json(ExecutionOutput { stdout, stderr }))),
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
-    let app = Router::new().route("/hello", get(route_hello));
+    let app = Router::new()
+        .route("/hello", get(route_hello))
+        .route("/execute", post(route_execute));
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 8000));
     axum::serve(tokio::net::TcpListener::bind(addr).await.unwrap(), app)
