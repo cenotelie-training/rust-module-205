@@ -157,11 +157,15 @@ impl HostOutputStream for MyStream {
     }
 }
 
+const EXEC_FUEL_START: u64 = 100_000;
+const EXEC_FUEL_YIELD: u64 = 5000;
+
 /// Execute the job payload after building
 #[allow(clippy::unused_async)]
 async fn execute_payload(wasm_file: &str) -> Result<(String, String), anyhow::Error> {
     let mut config = Config::new();
     config.async_support(true);
+    config.consume_fuel(true);
     let engine = Engine::new(&config)?;
     let stdout = Arc::new(Mutex::new(String::new()));
     let stderr = Arc::new(Mutex::new(String::new()));
@@ -173,6 +177,8 @@ async fn execute_payload(wasm_file: &str) -> Result<(String, String), anyhow::Er
         context_wasi_p1,
     };
     let mut store = Store::new(&engine, host);
+    store.set_fuel(EXEC_FUEL_START)?;
+    store.fuel_async_yield_interval(Some(EXEC_FUEL_YIELD))?;
     let mut linker = wasmtime::Linker::new(&engine);
     wasmtime_wasi::preview1::add_to_linker_async(&mut linker, |host: &mut StoreData| &mut host.context_wasi_p1)?;
 
